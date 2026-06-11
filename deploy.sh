@@ -69,39 +69,50 @@ atualizar_repositorios() {
 
 corrigir_dockerfiles() {
     echo "======= Corrigindo permissões e modos de produção nos Dockerfiles ======="
-    
-    # Correção do Backend (DSpace)
-    if [ -f DSpace/Dockerfile ] && ! grep -q "USER root" DSpace/Dockerfile; then
+
+    # -------------------------------------------------------------------------
+    # Backend (DSpace)
+    # -------------------------------------------------------------------------
+
+    if [ -f DSpace/Dockerfile ] && ! grep -q "^USER root$" DSpace/Dockerfile; then
         sed -i '/RUN mkdir \/install/i USER root' DSpace/Dockerfile
         echo "Dockerfile de produção do backend corrigido."
     fi
 
-    if [ -f DSpace/Dockerfile.test ] && ! grep -q "USER root" DSpace/Dockerfile.test; then
+    if [ -f DSpace/Dockerfile.test ] && ! grep -q "^USER root$" DSpace/Dockerfile.test; then
         sed -i '/RUN mkdir \/install/i USER root' DSpace/Dockerfile.test
         echo "Dockerfile.test de desenvolvimento do backend corrigido."
     fi
 
-    # Correção Robusta do Frontend (dspace-angular) para Produção SSR Nativa
-    if [ -f dspace-angular/Dockerfile ]; then
-        # 1. Limpa resquícios antigos para garantir idempotência (evitar duplicidade)
-        sed -i '/ENV NODE_ENV=/d' dspace-angular/Dockerfile
-        sed -i '/CMD npm run/d' dspace-angular/Dockerfile
-        sed -i '/RUN npm run build:prod/d' dspace-angular/Dockerfile
-        sed -i '/# --- Configuração de Produção SSR Nativa/d' dspace-angular/Dockerfile
+    # -------------------------------------------------------------------------
+    # Frontend (Angular SSR)
+    # -------------------------------------------------------------------------
 
-        # 2. Injeta o Build na montagem da imagem e o start puro no Runtime
-        cat << 'EOF' >> dspace-angular/Dockerfile
+    if [ -f dspace-angular/Dockerfile ]; then
+
+        # Remove bloco de desenvolvimento padrão
+        sed -i '/ENV NODE_ENV=development/d' dspace-angular/Dockerfile
+        sed -i '/CMD npm run serve -- --host 0.0.0.0/d' dspace-angular/Dockerfile
+        
+        # Remove bloco injetado anteriormente
+        sed -i '/# --- Configuração de Produção SSR Nativa (dspace-docker-deploy) ---/,$d' \
+            dspace-angular/Dockerfile
+
+        # Adiciona novamente o bloco de produção
+        cat <<'EOF' >> dspace-angular/Dockerfile
 
 # --- Configuração de Produção SSR Nativa (dspace-docker-deploy) ---
 ENV NODE_ENV=production
 
-# Executa a compilação pesada DURANTE o docker build (Imagem fica pronta e leve)
+# Executa a compilação durante o build da imagem
 RUN npm run build:prod
 
-# No runtime, apenas inicializa o servidor Express instantaneamente
+# Inicializa o servidor SSR no runtime
 CMD ["npm", "run", "serve:ssr"]
+
 EOF
-        echo "Dockerfile do frontend otimizado: Build no artefato e Start no runtime."
+
+        echo "Dockerfile do frontend otimizado para produção SSR."
     fi
 }
 
