@@ -2,11 +2,13 @@
 
 set -e
 
-# --- FUNÇÕES MODULARES ---
+# -----------------------------------------------------------------------------
+# FUNCTIONS
+# -----------------------------------------------------------------------------
 
-carregar_env() {
+load_env() {
     if [ ! -f .env ]; then
-        echo "Erro: Arquivo .env não encontrado."
+        echo "Error: .env file not found."
         exit 1
     fi
 
@@ -15,60 +17,66 @@ carregar_env() {
     set +o allexport
 }
 
-clonar_repositorios() {
-    echo "======= Clonando os Repositórios ======="
-    local alvo_backend="${DSPACE_BACKEND_TAG:-main}"
-    local alvo_frontend="${DSPACE_FRONTEND_TAG:-main}"
+clone_repositories() {
+    echo "======= Cloning Repositories ======="
+
+    local backend_target="${DSPACE_BACKEND_TAG:-main}"
+    local frontend_target="${DSPACE_FRONTEND_TAG:-main}"
 
     if [ ! -d "DSpace" ]; then
-        echo "Clonando backend de: $DSPACE_BACKEND_REPO (Alvo: $alvo_backend)"
-        git clone -b "$alvo_backend" "$DSPACE_BACKEND_REPO" DSpace
+        echo "Cloning backend from: $DSPACE_BACKEND_REPO (Target: $backend_target)"
+        git clone -b "$backend_target" "$DSPACE_BACKEND_REPO" DSpace
     else
-        echo "Pasta DSpace já existe. Pulando clone."
+        echo "DSpace directory already exists. Skipping clone."
     fi
 
     if [ ! -d "dspace-angular" ]; then
-        echo "Clonando frontend de: $DSPACE_FRONTEND_REPO (Alvo: $alvo_frontend)"
-        git clone -b "$alvo_frontend" "$DSPACE_FRONTEND_REPO" dspace-angular
+        echo "Cloning frontend from: $DSPACE_FRONTEND_REPO (Target: $frontend_target)"
+        git clone -b "$frontend_target" "$DSPACE_FRONTEND_REPO" dspace-angular
     else
-        echo "Pasta dspace-angular já existe. Pulando clone."
+        echo "dspace-angular directory already exists. Skipping clone."
     fi
 }
 
-atualizar_repositorios() {
-    echo "======= Atualizando os Repositórios (Git Fetch & Checkout) ======="
-    local alvo_backend="${DSPACE_BACKEND_TAG:-main}"
-    local alvo_frontend="${DSPACE_FRONTEND_TAG:-main}"
-    
-    # Atualização do Backend
+update_repositories() {
+    echo "======= Updating Repositories (Git Fetch & Checkout) ======="
+
+    local backend_target="${DSPACE_BACKEND_TAG:-main}"
+    local frontend_target="${DSPACE_FRONTEND_TAG:-main}"
+
+    # Backend
     if [ -d "DSpace" ]; then
-        echo "Atualizando backend para o alvo: $alvo_backend..."
+        echo "Updating backend to target: $backend_target"
+
         cd DSpace
         git fetch --all --tags --prune
-        git checkout "$alvo_backend"
-        git pull origin "$alvo_backend" 2>/dev/null || echo "Nota: Backend está em uma Tag fixa."
+        git checkout "$backend_target"
+        git pull origin "$backend_target" 2>/dev/null || \
+            echo "Notice: Backend is using a fixed tag."
         cd ..
     else
-        echo "Erro: Pasta DSpace não encontrada para atualização."
+        echo "Error: DSpace directory not found."
         exit 1
     fi
 
-    # Atualização do Frontend
+    # Frontend
     if [ -d "dspace-angular" ]; then
-        echo "Atualizando frontend para o alvo: $alvo_frontend..."
+        echo "Updating frontend to target: $frontend_target"
+
         cd dspace-angular
         git fetch --all --tags --prune
-        git checkout "$alvo_frontend"
-        git pull origin "$alvo_frontend" 2>/dev/null || echo "Nota: Frontend está em uma Tag fixa."
+        git checkout "$frontend_target"
+        git pull origin "$frontend_target" 2>/dev/null || \
+            echo "Notice: Frontend is using a fixed tag."
         cd ..
     else
-        echo "Erro: Pasta dspace-angular não encontrada para atualização."
+        echo "Error: dspace-angular directory not found."
         exit 1
     fi
 }
 
-corrigir_dockerfiles() {
-    echo "======= Corrigindo permissões e modos de produção nos Dockerfiles ======="
+patch_dockerfiles() {
+    echo "======= Applying Dockerfile Production Patches ======="
 
     # -------------------------------------------------------------------------
     # Backend (DSpace)
@@ -76,12 +84,12 @@ corrigir_dockerfiles() {
 
     if [ -f DSpace/Dockerfile ] && ! grep -q "^USER root$" DSpace/Dockerfile; then
         sed -i '/RUN mkdir \/install/i USER root' DSpace/Dockerfile
-        echo "Dockerfile de produção do backend corrigido."
+        echo "Backend production Dockerfile patched."
     fi
 
     if [ -f DSpace/Dockerfile.test ] && ! grep -q "^USER root$" DSpace/Dockerfile.test; then
         sed -i '/RUN mkdir \/install/i USER root' DSpace/Dockerfile.test
-        echo "Dockerfile.test de desenvolvimento do backend corrigido."
+        echo "Backend development Dockerfile patched."
     fi
 
     # -------------------------------------------------------------------------
@@ -90,97 +98,107 @@ corrigir_dockerfiles() {
 
     if [ -f dspace-angular/Dockerfile ]; then
 
-        # Remove bloco de desenvolvimento padrão
+        # Remove default development configuration
         sed -i '/ENV NODE_ENV=development/d' dspace-angular/Dockerfile
         sed -i '/CMD npm run serve -- --host 0.0.0.0/d' dspace-angular/Dockerfile
-        
-        # Remove bloco injetado anteriormente
-        sed -i '/# --- Configuração de Produção SSR Nativa (dspace-docker-deploy) ---/,$d' \
+
+        # Remove previously injected production block
+        sed -i '/# --- Native SSR Production Configuration (dspace-docker-deploy) ---/,$d' \
             dspace-angular/Dockerfile
 
-        # Adiciona novamente o bloco de produção
+        # Append production configuration
         cat <<'EOF' >> dspace-angular/Dockerfile
 
-# --- Configuração de Produção SSR Nativa (dspace-docker-deploy) ---
+# --- Native SSR Production Configuration (dspace-docker-deploy) ---
 ENV NODE_ENV=production
 
-# Executa a compilação durante o build da imagem
+# Build the Angular application during image build
 RUN npm run build:prod
 
-# Inicializa o servidor SSR no runtime
+# Start the SSR server at runtime
 CMD ["npm", "run", "serve:ssr"]
 
 EOF
 
-        echo "Dockerfile do frontend otimizado para produção SSR."
+        echo "Frontend Dockerfile optimized for SSR production."
     fi
 }
 
-executar_build() {
-    echo "======= Reconstruindo o Ambiente de PRODUÇÃO ======="
-    # Injeta tolerância a falhas de rede para evitar 'Connection reset' no Maven
+build_environment() {
+    echo "======= Building Production Environment ======="
+
     export MAVEN_OPTS="-Dhttp.keepAlive=false -Dmaven.wagon.http.retryHandler.count=5 -Dmaven.wagon.http.pool=false"
+
     docker compose -f docker-compose.prod.yml build --no-cache
 }
 
-subir_containers() {
-    echo "======= Subindo os Containers ======="
+start_containers() {
+    echo "======= Starting Containers ======="
+
     docker compose -f docker-compose.prod.yml up -d
-    echo "======= Ambiente DSpace de PRODUÇÃO online! ======="
+
+    echo "======= DSpace Production Environment Online ======="
 }
 
-derrubar_containers() {
-    echo "======= Derrubando Containers Atuais ======="
+remove_containers() {
+    echo "======= Removing Existing Containers ======="
+
     docker compose -f docker-compose.prod.yml down --remove-orphans
 }
 
-parar_containers() {
-    echo "======= Parando Containers ======="
+stop_containers() {
+    echo "======= Stopping Containers ======="
+
     docker compose -f docker-compose.prod.yml stop
 }
 
-exibir_ajuda() {
-    echo "Uso: $0 {install|update|rebuild|restart}"
-    echo "  install : Faz o clone inicial e instala todo o ambiente"
-    echo "  update  : Atualiza o código fonte (git pull), reconstrói as imagens e reinicia"
-    echo "  rebuild : Reconstrói as imagens locais sem atualizar o código e reinicia"
-    echo "  restart : Apenas reinicia os containers atuais"
+show_help() {
+    echo "Usage: $0 {install|update|rebuild|restart|stop}"
+    echo
+    echo "Commands:"
+    echo "  install  Clone repositories and install the entire environment"
+    echo "  update   Update source code (git pull), rebuild images, and restart"
+    echo "  rebuild  Rebuild local images without updating source code and restart"
+    echo "  restart  Restart the current containers"
+    echo "  stop     Stop all running containers"
     exit 1
 }
 
-# --- FLUXO PRINCIPAL DE EXECUÇÃO ---
+# -----------------------------------------------------------------------------
+# MAIN EXECUTION FLOW
+# -----------------------------------------------------------------------------
 
-carregar_env
+load_env
 
 case "$1" in
     install)
-        clonar_repositorios
-        corrigir_dockerfiles
-        derrubar_containers
-        executar_build
-        subir_containers
+        clone_repositories
+        patch_dockerfiles
+        remove_containers
+        build_environment
+        start_containers
         ;;
     update)
-        atualizar_repositorios
-        corrigir_dockerfiles
-        derrubar_containers
-        executar_build
-        subir_containers
+        update_repositories
+        patch_dockerfiles
+        remove_containers
+        build_environment
+        start_containers
         ;;
     rebuild)
-        corrigir_dockerfiles
-        derrubar_containers
-        executar_build
-        subir_containers
+        patch_dockerfiles
+        remove_containers
+        build_environment
+        start_containers
         ;;
     restart)
-        derrubar_containers
-        subir_containers
+        remove_containers
+        start_containers
         ;;
     stop)
-        parar_containers
+        stop_containers
         ;;
     *)
-        exibir_ajuda
+        show_help
         ;;
 esac
