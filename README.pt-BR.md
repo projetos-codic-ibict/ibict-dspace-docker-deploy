@@ -67,7 +67,7 @@ Correspondência entre propriedades do local.cfg e variáveis do .env:
 
 ## Script de Deploy Automatizado (`deploy.sh`)
 
-O script `./deploy.sh` automatiza todo o ciclo de vida da aplicação. Ele gerencia as atualizações via Git, corrige permissões críticas de infraestrutura e injeta parâmetros de tolerância a falhas de rede (`MAVEN_OPTS`) para mitigar quedas de conexão (`Connection reset`) durante o build do backend.
+O script `./deploy.sh` automatiza todo o ciclo de vida da aplicação. 
 
 ### Como usar
 
