@@ -1,6 +1,6 @@
-# Gestión del Entorno DSpace (Producción)
+# Gestión del Entorno DSpace en Producción
 
-Este repositorio centraliza la orquestación y el despliegue automatizado de la plataforma DSpace (Backend Spring Boot, Frontend Angular SSR y Apache Solr) utilizando Docker de forma modular.
+Este repositorio centraliza la orquestación y el despliegue automatizado de la plataforma DSpace (Backend Spring Boot, Frontend Angular SSR, PostgreSQL y Apache Solr) utilizando Docker de forma modular en entornos de producción.
 
 Idiomas:
 -  Español (este documento)
