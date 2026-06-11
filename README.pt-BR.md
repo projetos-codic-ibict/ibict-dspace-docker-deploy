@@ -35,7 +35,7 @@ mail.server.port = 587
 
 ### Observações
 
-As propriedades listadas abaixo são gerenciadas pela implantação Docker e não devem ser modificadas neste arquivo.
+As propriedades listadas abaixo são gerenciadas pela implantação Docker e não devem ser modificadas no arquivo `local.cfg`.
 
 Propriedades fixas:
 - dspace.dir
