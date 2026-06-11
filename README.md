@@ -27,8 +27,7 @@ Certifique-se de que o script possui permissão de execução:
 chmod +x deploy.sh
 ```
 
-Execute o comando passando uma das opções abaixo:
-
+> Execute o comando passando uma das opções abaixo (utilize `sudo` se o seu usuário não estiver no grupo `docker`):
 
 |**Comando**|**Descrição**|
 |---|---|
@@ -41,6 +40,8 @@ Execute o comando passando uma das opções abaixo:
 ## 🛠️ Gerenciamento Granular de Serviços (Docker Compose)
 
 Em cenários de manutenção ou depuração, você não precisa derrubar todo o ecossistema. O Docker Compose permite parar, iniciar ou reiniciar serviços de forma isolada.
+
+> Nota de Permissão: Se necessário, utilize o prefixo `sudo` antes dos comandos `docker` e `docker compose` listados abaixo caso o seu ambiente exija privilégios elevados.
 
 ### Lista de Serviços Disponíveis
 
@@ -105,7 +106,11 @@ docker compose -f docker-compose.prod.yml restart dspace
 
 ## Logs e comandos úteis
 
-Para visualizar os logs de um serviço específico:
+> Nota de Permissão: Se necessário, utilize o prefixo `sudo` antes dos comandos `docker` e `docker compose` listados abaixo caso o seu ambiente exija privilégios elevados.
+
+### Monitoramento de Logs do Docker (Saída padrão)
+
+Para visualizar e acompanhar em tempo real os logs de saída de um container específico:
 
 ```bash
 docker logs -f <nome-do-serviço>
@@ -115,19 +120,25 @@ docker logs -f dspace-angular
 
 ```
 
-Para visualizar os logs do DSpace (backend):
+### Monitoramento de Logs Internos do DSpace (arquivo /dspace/log/dspace.log)
+
+Para inspecionar o arquivo físico de log gerado pela API REST do DSpace:
 
 ```bash
 docker exec -it dspace tail -f /dspace/log/dspace.log
 ```
 
-Para visualizar o arquivo de configuração do dspace-angular:
+### Verificação de Configurações Ativas (Frontend)
+
+Para inspecionar o arquivo JSON de runtime gerado após a aplicação de patches do ambiente no Angular:
 
 ```bash
 docker exec -it dspace-angular cat /app/src/assets/config.json
 ```
 
-Para criar um novo usuário administrador no DSpace (backend):
+#### Criação de Usuário Administrador (E-Person)
+
+Para criar o primeiro usuário administrador com privilégios totais no sistema:
 
 ```bash
 docker exec -it dspace /dspace/bin/dspace create-administrator        
