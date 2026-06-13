@@ -1,5 +1,6 @@
 DSpace
 dspace-angular
+local.cfg
 .env
 .lock_migrated
 .lock_installed
