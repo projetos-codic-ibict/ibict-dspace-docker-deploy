@@ -19,6 +19,8 @@ services:
       - dspacenet
     volumes:
       - pgdata:/pgdata
+      # Injeta automaticamente o dump da migração na inicialização inicial do banco
+      - ./migration/db:/docker-entrypoint-initdb.d
     restart: always
 
   # Solr Search Engine
@@ -120,9 +122,14 @@ services:
       - dspacenet
     depends_on:
       - dspace
+    # ISSO É CRUCIAL: Remove o entrypoint de desenvolvimento herdado do DSpace 10
+    entrypoint: []
     restart: always
 
+# Força nomes fixos globais para mapeamento seguro dos containers Alpine no deploy.sh
 volumes:
   assetstore:
-  pgdata:
+    name: dspace_docker_deploy_assetstore
   solr_data:
+    name: dspace_docker_deploy_solr_data
+  pgdata:
