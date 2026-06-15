@@ -93,6 +93,13 @@ migrate_legacy_data() {
     echo "======= Legacy Migration Data Prepared Successfully ======="
 }
 
+ensure_docker_volumes() {
+    echo "Ensuring required Docker volumes exist..."
+    docker volume create dspace_docker_deploy_assetstore >/dev/null || true
+    docker volume create dspace_docker_deploy_solr_data >/dev/null || true
+    docker volume create dspace-docker-deploy_pgdata >/dev/null || true
+}
+
 clone_repositories() {
     echo "======= Cloning Repositories ======="
     local backend_target="${DSPACE_BACKEND_TAG:-main}"
@@ -240,6 +247,7 @@ case "$1" in
         clone_repositories
         patch_dockerfiles
         remove_containers
+        ensure_docker_volumes
         build_environment
         start_containers
         touch "$LOCK_INSTALL"

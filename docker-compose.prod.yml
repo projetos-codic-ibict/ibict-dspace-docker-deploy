@@ -130,7 +130,10 @@ services:
 volumes:
   assetstore:
     name: dspace_docker_deploy_assetstore
+    external: true
   solr_data:
     name: dspace_docker_deploy_solr_data
+    external: true
   pgdata:
     name: dspace-docker-deploy_pgdata
+    external: true
