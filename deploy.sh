@@ -35,6 +35,13 @@ check_locks() {
     fi
 }
 
+ensure_docker_volumes() {
+    echo "Ensuring required Docker volumes exist..."
+    docker volume create dspace_docker_deploy_assetstore >/dev/null || true
+    docker volume create dspace_docker_deploy_solr_data >/dev/null || true
+    docker volume create dspace-docker-deploy_pgdata >/dev/null || true
+}
+
 migrate_legacy_data() {
     echo "======= Validating Migration Requirements ======="
 
@@ -71,10 +78,8 @@ migrate_legacy_data() {
     echo "Overwriting local.cfg with legacy configuration..."
     cp "$OLD_LOCAL_CFG_PATH" ./local.cfg
 
-    # 4. Inicializa volumes vazios do Docker
-    echo "Creating Docker volumes if they don't exist..."
-    docker volume create dspace_docker_deploy_assetstore >/dev/null || true
-    docker volume create dspace_docker_deploy_solr_data >/dev/null || true
+    # 4. Inicializa volumes vazios do Docker globalmente
+    ensure_docker_volumes
 
     # 5. Copia os Arquivos Físicos (Assetstore) usando Container Intermediário
     echo "Migrating assetstore files via temporary container..."
@@ -91,13 +96,6 @@ migrate_legacy_data() {
       alpine sh -c "cp -r /from/. /to/ && chown -R 8983:8983 /to"
 
     echo "======= Legacy Migration Data Prepared Successfully ======="
-}
-
-ensure_docker_volumes() {
-    echo "Ensuring required Docker volumes exist..."
-    docker volume create dspace_docker_deploy_assetstore >/dev/null || true
-    docker volume create dspace_docker_deploy_solr_data >/dev/null || true
-    docker volume create dspace-docker-deploy_pgdata >/dev/null || true
 }
 
 clone_repositories() {
@@ -246,7 +244,6 @@ case "$1" in
         check_locks
         clone_repositories
         patch_dockerfiles
-        remove_containers
         ensure_docker_volumes
         build_environment
         start_containers
@@ -257,7 +254,6 @@ case "$1" in
         check_locks
         clone_repositories
         patch_dockerfiles
-        remove_containers
         migrate_legacy_data
         build_environment
         start_containers
