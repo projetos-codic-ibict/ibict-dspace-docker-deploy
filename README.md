@@ -79,9 +79,11 @@ cp local.cfg.example local.cfg
 
 ```
 
-1. **Edit the `.env` file:** Configure your environment variables (repositories, tags/branches, credentials, and ports).
+1. **Edit the `.env` file:** Configure your environment variables (repositories, tags/branches, credentials, ports, Docker subnet, and migration options).
 2. **⚠️ Critical Attention:** Change the `POSTGRES_PASSWORD` variable in the `.env` file to a strong password before starting the environment for the first time.
 3. **Edit the `local.cfg` file:** Add DSpace application-specific properties (metadata, SMTP/Email server, external authentication, etc.).
+
+The deployment script reads `.env` as data and does not execute it as a shell script. Use standard `KEY=value` lines and quote values that contain spaces.
 
 ### Important Rules for `local.cfg`
 
@@ -98,7 +100,7 @@ To prevent networking conflicts within the internal Docker network, strictly adh
 
 ## 3. Available Commands (`deploy.sh`)
 
-The `./deploy.sh` script automates the infrastructure lifecycle. It includes a mechanism that detects `root` privileges on the first run to set up initial structures, then transparently delegates all subsequent processing to the `dspace` user.
+The `./deploy.sh` script automates the infrastructure lifecycle. Run it as the dedicated `dspace` user after that user has Docker permissions.
 
 Ensure the script has execution permissions:
 
@@ -125,15 +127,22 @@ chmod +x deploy.sh
 
 > ⚠️ **Migration Compatibility:** The source installation and the Docker container **must use the exact same DSpace version** (e.g., 9.x to 9.x). Do not use this migration script to perform version upgrades (e.g., 7.x to 9.x). Upgrade your standalone DSpace instance before migrating.
 
+Migration requires empty Docker volumes for PostgreSQL, assetstore, and Solr. If a previous attempt failed, inspect the volumes before removing `.lock_in_progress` and retrying.
+
+By default, legacy Solr data is not copied (`MIGRATE_SOLR_DATA=false`). This is the recommended path for most migrations; start the environment and run a DSpace reindex after migration. Set `MIGRATE_SOLR_DATA=true` only when you intentionally need to copy old Solr cores.
+
 ### Lifecycle and Maintenance Operations
 
 | Command               | Description                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------------- |
-| `./deploy.sh update`  | Updates the source code (Git), rebuilds images without cache, and restarts the environment. |
-| `./deploy.sh rebuild` | Rebuilds local Docker images keeping the current code intact, then restarts.                |
-| `./deploy.sh restart` | Restarts all containers reusing the current images.                                         |
-| `./deploy.sh start`   | Starts existing containers.                                                                 |
-| `./deploy.sh stop`    | Stops the environment containers without removing volumes or data.                          |
+| `./deploy.sh update` | Updates source code with Git, rebuilds images without cache, and recreates the environment. The command stops if local changes exist in cloned DSpace repositories. |
+| `./deploy.sh rebuild` | Rebuilds local Docker images keeping the current code intact, then recreates the environment. |
+| `./deploy.sh restart` | Restarts existing containers without removing or recreating them. |
+| `./deploy.sh start` | Starts existing containers. |
+| `./deploy.sh stop` | Stops the environment containers without removing volumes or data. |
+| `./deploy.sh clean-migration` | Removes temporary migration files after a successful migration. |
+
+The script generates Dockerfile overrides in `.docker-build/` instead of editing the cloned upstream repositories in place.
 
 ---
 
@@ -163,6 +172,9 @@ docker exec -it dspace /dspace/bin/dspace create-administrator
 
 # Solr Reindexing (Discovery)
 docker exec -it dspace /dspace/bin/dspace index-discovery -b
+
+# Optional after migration: remove temporary migration files
+./deploy.sh clean-migration
 
 # Verify the active configuration file generated for the frontend
 docker exec -it dspace-angular cat /app/src/assets/config.json

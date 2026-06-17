@@ -73,9 +73,11 @@ cp local.cfg.example local.cfg
 
 ```
 
-1. **Editar o arquivo `.env`:** Configure as variáveis de ambiente (repositórios, tags/branches, credenciais e portas).
+1. **Editar o arquivo `.env`:** Configure as variáveis de ambiente (repositórios, tags/branches, credenciais, portas, subnet Docker e opções de migração).
 2. **⚠️ Atenção Crítica:** Altere a variável `POSTGRES_PASSWORD` no `.env` para uma senha forte antes de iniciar o ambiente.
 3. **Editar o arquivo `local.cfg`:** Adicione as propriedades da aplicação DSpace (metadados, SMTP/E-mail, autenticação externa, etc.).
+
+O script de deploy lê o `.env` como dados e não executa o arquivo como script shell. Use linhas no formato `KEY=value` e coloque valores com espaços entre aspas.
 
 ### Regras Importantes para o `local.cfg`
 
@@ -92,7 +94,7 @@ Para evitar conflitos na rede interna do Docker, siga as restrições abaixo:
 
 ## 3. Comandos Disponíveis (`deploy.sh`)
 
-O script `./deploy.sh` gerencia o ciclo de vida da infraestrutura. Ele possui um mecanismo que detecta privilégios `root` na primeira execução para criar estruturas iniciais e delega o restante do processo de forma transparente para o usuário `dspace`.
+O script `./deploy.sh` gerencia o ciclo de vida da infraestrutura. Execute-o como o usuário dedicado `dspace` depois que esse usuário tiver permissão para usar o Docker.
 
 Garanta a permissão de execução:
 
@@ -120,15 +122,22 @@ chmod +x deploy.sh
 
 > ⚠️ **Compatibilidade da Migração:** A instalação de origem e o container Docker **devem usar a mesma versão do DSpace** (ex: 9.x para 9.x). Não use o script de migração para atualizar versões (ex: 7.x para 9.x). Atualize o DSpace standalone antes de migrar.
 
+A migração exige volumes Docker vazios para PostgreSQL, assetstore e Solr. Se uma tentativa anterior falhar, inspecione os volumes antes de remover `.lock_in_progress` e tentar novamente.
+
+Por padrão, os dados legados do Solr não são copiados (`MIGRATE_SOLR_DATA=false`). Esse é o caminho recomendado para a maioria das migrações; inicie o ambiente e execute a reindexação do DSpace depois da migração. Use `MIGRATE_SOLR_DATA=true` apenas quando for realmente necessário copiar cores antigos do Solr.
+
 ### Operações de Ciclo de Vida e Manutenção
 
 | Comando | Descrição |
 | --- | --- |
-| `./deploy.sh update` | Atualiza o código-fonte (Git), reconstrói as imagens sem cache e reinicia o ambiente. |
-| `./deploy.sh rebuild` | Reconstrói as imagens Docker locais mantendo o código atual e reinicia. |
-| `./deploy.sh restart` | Reinicia todos os containers reaproveitando as imagens atuais. |
+| `./deploy.sh update` | Atualiza o código-fonte com Git, reconstrói as imagens sem cache e recria o ambiente. O comando para se houver mudanças locais nos repositórios DSpace clonados. |
+| `./deploy.sh rebuild` | Reconstrói as imagens Docker locais mantendo o código atual e recria o ambiente. |
+| `./deploy.sh restart` | Reinicia os containers existentes sem removê-los ou recriá-los. |
 | `./deploy.sh start` | Inicia os containers existentes. |
 | `./deploy.sh stop` | Para os containers do ecossistema sem remover volumes ou dados. |
+| `./deploy.sh clean-migration` | Remove arquivos temporários de migração depois de uma migração bem-sucedida. |
+
+O script gera Dockerfiles ajustados em `.docker-build/` em vez de editar diretamente os repositórios upstream clonados.
 
 ---
 
@@ -158,6 +167,9 @@ docker exec -it dspace /dspace/bin/dspace create-administrator
 
 # Reindexação do Solr (Discovery)
 docker exec -it dspace /dspace/bin/dspace index-discovery -b
+
+# Opcional depois da migração: remover arquivos temporários de migração
+./deploy.sh clean-migration
 
 # Verificar o arquivo de configuração ativa gerado pelo frontend
 docker exec -it dspace-angular cat /app/src/assets/config.json

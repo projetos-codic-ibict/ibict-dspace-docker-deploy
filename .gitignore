@@ -4,4 +4,7 @@ local.cfg
 .env
 .lock_migrated
 .lock_installed
+.lock_in_progress
+.docker-build
+migration
 *.sql
