@@ -2,7 +2,6 @@
 
 This repository centralizes the orchestration and automated deployment of the DSpace platform (Spring Boot Backend, Angular SSR Frontend, PostgreSQL, and Apache Solr) using Docker in a modular architecture.
 
-
 [Versão em Português](README.pt-BR.md)
 
 [Versión en Español](README.es.md)
@@ -59,12 +58,12 @@ sudo chown -R dspace:dspace /opt/lareferencia-dspace-docker-deploy
 
 ```
 
-> ⚠️ **From this point forward, switch to the `dspace` user:** 
+> ⚠️ **From this point forward, switch to the `dspace` user:**
 
 ```bash
-sudo su - dspace 
+sudo su - dspace
 
-# and navigate to 
+# and navigate to
 cd /opt/lareferencia-dspace-docker-deploy
 
 ```
@@ -125,22 +124,43 @@ chmod +x deploy.sh
 
 ```
 
+#### Migrating
+
 > ⚠️ **Migration Compatibility:** The source installation and the Docker container **must use the exact same DSpace version** (e.g., 9.x to 9.x). Do not use this migration script to perform version upgrades (e.g., 7.x to 9.x). Upgrade your standalone DSpace instance before migrating.
 
 Migration requires empty Docker volumes for PostgreSQL, assetstore, and Solr. If a previous attempt failed, inspect the volumes before removing `.lock_in_progress` and retrying.
 
 By default, legacy Solr data is not copied (`MIGRATE_SOLR_DATA=false`). This is the recommended path for most migrations; start the environment and run a DSpace reindex after migration. Set `MIGRATE_SOLR_DATA=true` only when you intentionally need to copy old Solr cores.
 
+When `MIGRATE_SOLR_DATA=false`, preserve only the required Solr data through a logical export instead of copying the physical core directories. Before running the migration, execute this on the current DSpace installation:
+
+```bash
+mkdir -p /tmp/dspace-solr-export
+[dspace]/bin/dspace solr-export-statistics -i authority -d /tmp/dspace-solr-export -f
+[dspace]/bin/dspace solr-export-statistics -i statistics -d /tmp/dspace-solr-export -f
+```
+
+After migration, with the Docker environment running and the new Solr volume empty, reindex Discovery and import the exported data:
+
+```bash
+docker exec -it dspace /dspace/bin/dspace index-discovery -b
+docker cp /tmp/dspace-solr-export dspace:/tmp/dspace-solr-export
+docker exec -it dspace /dspace/bin/dspace solr-import-statistics -i authority -d /tmp/dspace-solr-export -c
+docker exec -it dspace /dspace/bin/dspace solr-import-statistics -i statistics -d /tmp/dspace-solr-export -c
+```
+
+Use `-c` only when the target core can be cleared before import. If the old installation has statistics shards, such as `statistics-2024`, export and import each shard with `-i`.
+
 ### Lifecycle and Maintenance Operations
 
-| Command               | Description                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| `./deploy.sh update` | Updates source code with Git, rebuilds images without cache, and recreates the environment. The command stops if local changes exist in cloned DSpace repositories. |
-| `./deploy.sh rebuild` | Rebuilds local Docker images keeping the current code intact, then recreates the environment. |
-| `./deploy.sh restart` | Restarts existing containers without removing or recreating them. |
-| `./deploy.sh start` | Starts existing containers. |
-| `./deploy.sh stop` | Stops the environment containers without removing volumes or data. |
-| `./deploy.sh clean-migration` | Removes temporary migration files after a successful migration. |
+| Command                       | Description                                                                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `./deploy.sh update`          | Updates source code with Git, rebuilds images without cache, and recreates the environment. The command stops if local changes exist in cloned DSpace repositories. |
+| `./deploy.sh rebuild`         | Rebuilds local Docker images keeping the current code intact, then recreates the environment.                                                                       |
+| `./deploy.sh restart`         | Restarts existing containers without removing or recreating them.                                                                                                   |
+| `./deploy.sh start`           | Starts existing containers.                                                                                                                                         |
+| `./deploy.sh stop`            | Stops the environment containers without removing volumes or data.                                                                                                  |
+| `./deploy.sh clean-migration` | Removes temporary migration files after a successful migration.                                                                                                     |
 
 The script generates Dockerfile overrides in `.docker-build/` instead of editing the cloned upstream repositories in place.
 
@@ -176,8 +196,10 @@ docker exec -it dspace /dspace/bin/dspace index-discovery -b
 # Optional after migration: remove temporary migration files
 ./deploy.sh clean-migration
 
-# Verify the active configuration file generated for the frontend
-docker exec -it dspace-angular cat /app/src/assets/config.json
+# Verify the frontend runtime configuration
+docker exec -it dspace-angular cat /app/dist/browser/assets/config.json
+docker exec -it dspace-angular cat /app/config/config.yml
+docker exec -it dspace-angular env | grep '^DSPACE_' | sort
 
 ```
 

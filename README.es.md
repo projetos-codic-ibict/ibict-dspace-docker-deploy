@@ -54,7 +54,8 @@ sudo chown -R dspace:dspace /opt/lareferencia-dspace-docker-deploy
 
 ```
 
-> ⚠️ **A partir de este punto, cambie al usuario `dspace`:** 
+> ⚠️ **A partir de este punto, cambie al usuario `dspace`:**
+
 ```bash
 sudo su - dspace
 
@@ -119,22 +120,43 @@ chmod +x deploy.sh
 
 ```
 
+#### Migración
+
 > ⚠️ **Compatibilidad de la Migración:** La instalación de origen y el contenedor Docker **deben utilizar la misma versión de DSpace** (ej: 9.x a 9.x). No utilice el script de migración para actualizar versiones (ej: 7.x a 9.x). Actualice el DSpace standalone antes de migrar.
 
 La migración requiere volúmenes Docker vacíos para PostgreSQL, assetstore y Solr. Si un intento anterior falla, inspeccione los volúmenes antes de eliminar `.lock_in_progress` y volver a intentar.
 
 Por defecto, los datos heredados de Solr no se copian (`MIGRATE_SOLR_DATA=false`). Este es el camino recomendado para la mayoría de las migraciones; inicie el entorno y ejecute la reindexación de DSpace después de migrar. Use `MIGRATE_SOLR_DATA=true` solo cuando realmente necesite copiar cores antiguos de Solr.
 
+Cuando `MIGRATE_SOLR_DATA=false`, conserve solo los datos necesarios de Solr mediante una exportación lógica, sin copiar los directorios físicos de los cores. Antes de ejecutar la migración, ejecute en el DSpace actual:
+
+```bash
+mkdir -p /tmp/dspace-solr-export
+[dspace]/bin/dspace solr-export-statistics -i authority -d /tmp/dspace-solr-export -f
+[dspace]/bin/dspace solr-export-statistics -i statistics -d /tmp/dspace-solr-export -f
+```
+
+Después de la migración, con el entorno Docker iniciado y el Solr nuevo vacío, reindexe Discovery e importe los datos exportados:
+
+```bash
+docker exec -it dspace /dspace/bin/dspace index-discovery -b
+docker cp /tmp/dspace-solr-export dspace:/tmp/dspace-solr-export
+docker exec -it dspace /dspace/bin/dspace solr-import-statistics -i authority -d /tmp/dspace-solr-export -c
+docker exec -it dspace /dspace/bin/dspace solr-import-statistics -i statistics -d /tmp/dspace-solr-export -c
+```
+
+Use `-c` solo cuando el core de destino pueda limpiarse antes de la importación. Si la instalación antigua tiene shards de estadísticas, como `statistics-2024`, exporte e importe cada shard con `-i`.
+
 ### Operaciones de Ciclo de Vida y Mantenimiento
 
-| Comando               | Descripción                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| `./deploy.sh update` | Actualiza el código fuente con Git, reconstruye las imágenes sin caché y recrea el entorno. El comando se detiene si existen cambios locales en los repositorios DSpace clonados. |
-| `./deploy.sh rebuild` | Reconstruye las imágenes Docker locales manteniendo el código actual y recrea el entorno. |
-| `./deploy.sh restart` | Reinicia los contenedores existentes sin eliminarlos ni recrearlos. |
-| `./deploy.sh start` | Inicia los contenedores existentes. |
-| `./deploy.sh stop` | Detiene los contenedores del ecosistema sin eliminar volúmenes ni datos. |
-| `./deploy.sh clean-migration` | Elimina archivos temporales de migración después de una migración exitosa. |
+| Comando                       | Descripción                                                                                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `./deploy.sh update`          | Actualiza el código fuente con Git, reconstruye las imágenes sin caché y recrea el entorno. El comando se detiene si existen cambios locales en los repositorios DSpace clonados. |
+| `./deploy.sh rebuild`         | Reconstruye las imágenes Docker locales manteniendo el código actual y recrea el entorno.                                                                                         |
+| `./deploy.sh restart`         | Reinicia los contenedores existentes sin eliminarlos ni recrearlos.                                                                                                               |
+| `./deploy.sh start`           | Inicia los contenedores existentes.                                                                                                                                               |
+| `./deploy.sh stop`            | Detiene los contenedores del ecosistema sin eliminar volúmenes ni datos.                                                                                                          |
+| `./deploy.sh clean-migration` | Elimina archivos temporales de migración después de una migración exitosa.                                                                                                        |
 
 El script genera Dockerfiles ajustados en `.docker-build/` en lugar de editar directamente los repositorios upstream clonados.
 
@@ -170,8 +192,10 @@ docker exec -it dspace /dspace/bin/dspace index-discovery -b
 # Opcional después de la migración: eliminar archivos temporales de migración
 ./deploy.sh clean-migration
 
-# Verificar el archivo de configuración activa generado por el frontend
-docker exec -it dspace-angular cat /app/src/assets/config.json
+# Verificar la configuración de ejecución del frontend
+docker exec -it dspace-angular cat /app/dist/browser/assets/config.json
+docker exec -it dspace-angular cat /app/config/config.yml
+docker exec -it dspace-angular env | grep '^DSPACE_' | sort
 
 ```
 
